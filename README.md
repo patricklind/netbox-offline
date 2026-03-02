@@ -1,23 +1,23 @@
 # netbox-offline
 
-Offline-opgradering af NetBox på servere uden internetadgang.
+Offline upgrade of NetBox on servers without internet access.
 
-Repoet indeholder:
-- `upgrade_offline.sh`: opgraderingsscript der kan installere Python-afhængigheder fra en lokal `wheelhouse/`.
+The repository contains:
+- `upgrade_offline.sh`: upgrade script that can install Python dependencies from a local `wheelhouse/`.
 
-## Forudsætninger
+## Prerequisites
 
-- NetBox-kode ligger i `/opt/netbox` (eller tilsvarende mappe med `requirements*.txt` og `netbox/manage.py`).
-- Python 3.10+ er installeret på offline-serveren.
-- Du kan overføre filer fra en online server til offline-serveren.
-- Hvis du bruger plugins, ligger de i `local_requirements.txt`.
+- The NetBox code is located in `/opt/netbox` (or an equivalent directory containing `requirements*.txt` and `netbox/manage.py`).
+- Python 3.10+ is installed on the offline server.
+- You are able to transfer files from an online server to the offline server.
+- If you are using plugins, they are listed in `local_requirements.txt`.
 
-Vigtigt:
-- Byg wheels på en maskine med kompatibel OS/Python-arkitektur i forhold til målserveren.
+**Important:**
+- Build wheels on a machine with a compatible OS/Python architecture matching the target server.
 
-## 1) Byg wheelhouse på en online server
+## 1) Build wheelhouse on an online server
 
-Kør i NetBox-mappen:
+Run inside the NetBox directory:
 
 ```bash
 cd /opt/netbox
@@ -25,21 +25,21 @@ mkdir -p wheelhouse
 
 pip download --dest wheelhouse -r requirements.txt
 pip download --dest wheelhouse -r local_requirements.txt
-# Valgfrit (afhænger af dit setup):
+# Optional (depends on your setup):
 pip download --dest wheelhouse -r base_requirements.txt
 ```
 
-## 2) Overfør wheelhouse til offline NetBox-server
+## 2) Transfer wheelhouse to the offline NetBox server
 
-Eksempel med `scp`:
+Example using `scp`:
 
 ```bash
 scp -r wheelhouse/ user@offline-server:/opt/netbox/wheelhouse/
 ```
 
-## 3) Kør offline-opgraderingen
+## 3) Run the offline upgrade
 
-På offline-serveren:
+On the offline server:
 
 ```bash
 cd /opt/netbox
@@ -47,7 +47,7 @@ chown -R netbox:netbox /opt/netbox
 PYTHON=python3.11 ./upgrade_offline.sh
 ```
 
-Hvis din wheelhouse ligger et andet sted:
+If your wheelhouse is located elsewhere:
 
 ```bash
 WHEELHOUSE=/path/to/wheelhouse PYTHON=python3.11 ./upgrade_offline.sh
@@ -55,7 +55,7 @@ WHEELHOUSE=/path/to/wheelhouse PYTHON=python3.11 ./upgrade_offline.sh
 
 ### Read-only mode
 
-Hvis du kun vil installere dependencies og oprette venv (uden migrations):
+If you only want to install dependencies and create the virtual environment (without running migrations):
 
 ```bash
 PYTHON=python3.11 ./upgrade_offline.sh --readonly
@@ -63,26 +63,29 @@ PYTHON=python3.11 ./upgrade_offline.sh --readonly
 
 ## 4) Restart services
 
-Efter en fuld opgradering:
+After a full upgrade:
 
 ```bash
 sudo systemctl restart netbox netbox-rq
 ```
 
-## Hvad scriptet gør
+## What the script does
 
 `upgrade_offline.sh`:
-- Validerer at Python-versionen er 3.10 eller nyere.
-- Sletter eksisterende `venv/` og opretter en ny.
-- Installerer pakker fra `wheelhouse/` med `--no-index --find-links=...` hvis mappen findes.
-- Kører NetBox vedligeholdelseskommandoer (migrate, collectstatic, reindex, clearsessions m.fl.), medmindre `--readonly` bruges.
-- Sætter ejerskab til `netbox:netbox` på `/opt/netbox`.
 
-## Fejlfinding
+- Validates that the Python version is 3.10 or newer.
+- Deletes the existing `venv/` and creates a new one.
+- Installs packages from `wheelhouse/` using `--no-index --find-links=...` if the directory exists.
+- Runs NetBox maintenance commands (`migrate`, `collectstatic`, `reindex`, `clearsessions`, etc.), unless `--readonly` is used.
+- Sets ownership to `netbox:netbox` on `/opt/netbox`.
 
-- `No wheelhouse directory found`:
-  Scriptet falder tilbage til online `pip`. På en isoleret server vil det typisk fejle. Overfør `wheelhouse/` og kør igen.
-- `Unsupported Python version`:
-  Brug en nyere Python, fx `PYTHON=python3.11`.
-- `No matching distribution found`:
-  Wheels matcher ikke målmiljøet. Rebuild wheelhouse på kompatibel platform/Python-version.
+## Troubleshooting
+
+- `No wheelhouse directory found`  
+  The script falls back to online `pip`. On an isolated server this will typically fail. Transfer `wheelhouse/` and run again.
+
+- `Unsupported Python version`  
+  Use a newer Python version, for example: `PYTHON=python3.11`.
+
+- `No matching distribution found`  
+  The wheels do not match the target environment. Rebuild the wheelhouse on a compatible platform/Python version.
