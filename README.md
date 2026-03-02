@@ -18,7 +18,8 @@ cd /opt/netbox
 
 nano local_requirements.txt 
 
-scp -r pwli@sftp.management.local:/FTPData-TEMP/PWLI/wheelhouse/* /opt/netbox/wheelhouse/
+#SCP
+scp -r user@sftp.management.local:/FTPData-TEMP/uesr/wheelhouse/* /opt/netbox/wheelhouse/
 
 sudo systemctl restart netbox netbox-rq
 
