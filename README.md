@@ -1,91 +1,55 @@
-# netbox-offline
+# NetBox offline upgrade
 
-Offline upgrade of NetBox on servers without internet access.
+Offline NetBox upgrade tools, intended for NetBox 4.7.x with Python 3.12+.
 
-The repository contains:
-- `upgrade_offline.sh`: upgrade script that can install Python dependencies from a local `wheelhouse/`.
+- `upgrade_offline.sh`: uses the local `/opt/netbox/wheelhouse` for dependency installation.
+- `export_netbox_python_packages.sh`: builds, tests and packages wheels on an internet-connected build machine.
 
-## Prerequisites
+## Requirements
 
-- The NetBox code is located in `/opt/netbox` (or an equivalent directory containing `requirements*.txt` and `netbox/manage.py`).
-- Python 3.10+ is installed on the offline server.
-- You are able to transfer files from an online server to the offline server.
-- If you are using plugins, they are listed in `local_requirements.txt`.
+On the build machine, check out the **same target NetBox release** as on the offline server. Use the same Linux architecture, Python minor version and compatible OS as the target server. The exporter requires access to the Python package index.
 
-**Important:**
-- Build wheels on a machine with a compatible OS/Python architecture matching the target server.
+Local plugin Python dependencies must be listed in `/opt/netbox/local_requirements.txt` on the build machine. It is not enough to copy only the Python wheels if a plugin requires native OS libraries.
 
-## 1) Build wheelhouse on an online server
-
-Run inside the NetBox directory:
+## Export on the internet-connected build machine
 
 ```bash
 cd /opt/netbox
-mkdir -p wheelhouse
-
-pip download --dest wheelhouse -r requirements.txt
-pip download --dest wheelhouse -r local_requirements.txt
-# Optional (depends on your setup):
-pip download --dest wheelhouse -r base_requirements.txt
+sudo PYTHON=/usr/bin/python3.12 ./export_netbox_python_packages.sh
 ```
 
-## 2) Transfer wheelhouse to the offline NetBox server
+The exporter installs dependencies into a disposable virtual environment and performs an **offline** installation test before publishing `wheelhouse/`. It includes `zensical`, which is required for the NetBox 4.7 documentation build.
 
-Example using `scp`:
+Outputs:
+- `/opt/netbox/netbox-python-packages-wheelhouse.tar.gz`
+- `/opt/netbox/netbox-python-packages-wheelhouse.tar.gz.sha256`
 
-```bash
-scp -r wheelhouse/ user@offline-server:/opt/netbox/wheelhouse/
-```
+## Import on the offline server
 
-## 3) Run the offline upgrade
-
-On the offline server:
+Transfer the tarball and checksum to `/opt/netbox`. Then:
 
 ```bash
 cd /opt/netbox
-chown -R netbox:netbox /opt/netbox
-PYTHON=python3.11 ./upgrade_offline.sh
+sha256sum -c netbox-python-packages-wheelhouse.tar.gz.sha256
+sudo tar -xzf netbox-python-packages-wheelhouse.tar.gz
+sudo chown -R netbox:netbox /opt/netbox/wheelhouse
 ```
 
-If your wheelhouse is located elsewhere:
+**Before any upgrade**, back up PostgreSQL and the NetBox configuration, verify plugin compatibility, and arrange a maintenance window. Database migrations are not undone by restoring the Python venv.
 
 ```bash
-WHEELHOUSE=/path/to/wheelhouse PYTHON=python3.11 ./upgrade_offline.sh
-```
-
-### Read-only mode
-
-If you only want to install dependencies and create the virtual environment (without running migrations):
-
-```bash
-PYTHON=python3.11 ./upgrade_offline.sh --readonly
-```
-
-## 4) Restart services
-
-After a full upgrade:
-
-```bash
+cd /opt/netbox
+bash -n upgrade_offline.sh
+sudo PYTHON=/usr/bin/python3.12 ./upgrade_offline.sh
 sudo systemctl restart netbox netbox-rq
 ```
 
-## What the script does
+The `--readonly` flag retains the original behavior: it skips migrations and later management commands, but still recreates the virtual environment. It is **not** a dry run.
 
-`upgrade_offline.sh`:
-
-- Validates that the Python version is 3.10 or newer.
-- Deletes the existing `venv/` and creates a new one.
-- Installs packages from `wheelhouse/` using `--no-index --find-links=...` if the directory exists.
-- Runs NetBox maintenance commands (`migrate`, `collectstatic`, `reindex`, `clearsessions`, etc.), unless `--readonly` is used.
-- Sets ownership to `netbox:netbox` on `/opt/netbox`.
+The default wheelhouse path in the upgrade script remains relative to its location (`$(pwd -P)/wheelhouse`). The archive extracts into that same directory.
 
 ## Troubleshooting
 
-- `No wheelhouse directory found`  
-  The script falls back to online `pip`. On an isolated server this will typically fail. Transfer `wheelhouse/` and run again.
-
-- `Unsupported Python version`  
-  Use a newer Python version, for example: `PYTHON=python3.11`.
-
-- `No matching distribution found`  
-  The wheels do not match the target environment. Rebuild the wheelhouse on a compatible platform/Python version.
+- `Offline wheelhouse not found`: verify that `/opt/netbox/wheelhouse` contains extracted `.whl` files and unset any incorrect `WHEELHOUSE` environment variable.
+- `No matching distribution found`: build the wheelhouse using the target release's requirements and a compatible OS, architecture and Python version.
+- Documentation build fails: verify the `zensical` command is installed in the new venv.
