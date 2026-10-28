@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Offline-aware NetBox upgrade script
-# Baseret på commit dc4bab7477e05c491fc0b68477055712d4f96351
+# Offline-aware upgrade aligned with NetBox v4.7.4 upstream upgrade.sh
 
 set -e
 
@@ -36,23 +36,23 @@ if [ -d "$WHEELHOUSE" ]; then
   echo "Using offline wheelhouse at: ${WHEELHOUSE}"
   PIP_FLAGS="--no-index --find-links=${WHEELHOUSE}"
 else
-  echo "WARNING: No wheelhouse directory found at: ${WHEELHOUSE}"
-  echo "         Falling back to normal pip behavior (online PyPI)."
-  echo "         Dette vil fejle/hænge på en server uden internet."
+  echo "ERROR: Offline wheelhouse not found: ${WHEELHOUSE}"
+  echo "Expected wheelhouse directory: $(pwd -P)/wheelhouse"
+  exit 1
 fi
 
-# --- Tjek minimum Python-version (3.10+) ----------------------------------
+# --- Tjek minimum Python-version (3.12+) ----------------------------------
 
-COMMAND="${PYTHON} -c 'import sys; exit(1 if sys.version_info < (3, 10) else 0)'"
+COMMAND="${PYTHON} -c 'import sys; exit(1 if sys.version_info < (3, 12) else 0)'"
 PYTHON_VERSION="$(${PYTHON} -V 2>&1 || true)"
 
 if ! eval "$COMMAND"; then
   echo "--------------------------------------------------------------------"
   echo "ERROR: Unsupported Python version: ${PYTHON_VERSION}"
-  echo "NetBox v4 kræver Python 3.10 eller nyere."
+  echo "NetBox 4.7 kræver Python 3.12 eller nyere."
   echo ""
   echo "Brug evt.:"
-  echo "  sudo PYTHON=/usr/bin/python3.10 $0"
+  echo "  sudo PYTHON=/usr/bin/python3.12 $0"
   echo ""
   echo "Aktuel Python-version kan ses med:"
   echo "  ${PYTHON} -V"
@@ -136,9 +136,15 @@ COMMAND="python3 netbox/manage.py trace_paths --no-input"
 echo "Checking for missing cable paths (${COMMAND})..."
 eval "$COMMAND"
 
+# --- Rebuild config context cache -----------------------------------------
+
+COMMAND="python3 netbox/manage.py rebuild_config_context_cache"
+echo "Caching config context data (${COMMAND})..."
+eval "$COMMAND"
+
 # --- Build dokumentation --------------------------------------------------
 
-COMMAND="mkdocs build"
+COMMAND="zensical build"
 echo "Building documentation (${COMMAND})..."
 eval "$COMMAND"
 
